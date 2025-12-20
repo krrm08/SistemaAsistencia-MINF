@@ -1,0 +1,30 @@
+/* Estilos globales */
+
+body {
+  background-color: #f4f7fb;
+}
+
+.navbar-brand {
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.card {
+  border-radius: 12px;
+}
+
+.btn {
+  border-radius: 8px;
+}
+
+.table {
+  background-color: #fff;
+}
+
+.table thead th {
+  vertical-align: middle;
+}
+
+footer {
+  font-size: 0.85rem;
+}
