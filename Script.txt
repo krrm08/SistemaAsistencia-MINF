@@ -1,0 +1,138 @@
+-- =========================================
+-- Base de datos: iglesia
+-- Motor: MySQL / MariaDB (XAMPP)
+-- =========================================
+
+DROP DATABASE IF EXISTS iglesia;
+CREATE DATABASE iglesia
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_general_ci;
+
+USE iglesia;
+
+-- =========================================
+-- Tabla: lideres
+-- =========================================
+CREATE TABLE lideres (
+  id INT(11) NOT NULL AUTO_INCREMENT,
+  nombre VARCHAR(100) NOT NULL,
+  pin_hash VARCHAR(255) NOT NULL,
+  rol ENUM('ADMIN','LIDER') NOT NULL DEFAULT 'LIDER',
+  creado_en DATETIME DEFAULT CURRENT_TIMESTAMP(),
+  PRIMARY KEY (id)
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_general_ci;
+
+-- =========================================
+-- Tabla: listas_asistencia
+-- =========================================
+CREATE TABLE listas_asistencia (
+  id INT(11) NOT NULL AUTO_INCREMENT,
+  fecha DATE NOT NULL,
+  creada_en DATETIME DEFAULT CURRENT_TIMESTAMP(),
+  lider_id INT(11) NOT NULL,
+  cerrada TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  KEY fk_lista_lider (lider_id),
+  CONSTRAINT fk_lista_lider
+    FOREIGN KEY (lider_id)
+    REFERENCES lideres(id)
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_general_ci;
+
+-- =========================================
+-- Tabla: asistencias
+-- =========================================
+CREATE TABLE asistencias (
+  id INT(11) NOT NULL AUTO_INCREMENT,
+  lista_id INT(11) NOT NULL,
+  lider_id INT(11) NOT NULL,
+  nombre VARCHAR(150) NOT NULL,
+  `grupo` ENUM('OSITOS','BUSCADORES') NOT NULL DEFAULT 'BUSCADORES',
+  color ENUM('ROJO','AZUL','VERDE','AMARILLO') NOT NULL,
+  manual TINYINT(1) NOT NULL DEFAULT 0,
+  biblia TINYINT(1) NOT NULL DEFAULT 0,
+  versiculo TINYINT(1) NOT NULL DEFAULT 0,
+  lecturas_dias TINYINT(4) NOT NULL DEFAULT 0,
+  lecturas_puntos INT(11) NOT NULL DEFAULT 0,
+  puntos_total INT(11) NOT NULL DEFAULT 0,
+  fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP(),
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_lista_nombre (lista_id, nombre),
+  KEY fk_asistencia_lider (lider_id),
+  CONSTRAINT fk_asistencia_lider
+    FOREIGN KEY (lider_id)
+    REFERENCES lideres(id),
+  CONSTRAINT fk_asistencia_lista
+    FOREIGN KEY (lista_id)
+    REFERENCES listas_asistencia(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_general_ci;
+
+-- =========================================
+-- Tabla: puntos_clase
+-- =========================================
+CREATE TABLE puntos_clase (
+  id INT(11) NOT NULL AUTO_INCREMENT,
+  lista_id INT(11) NOT NULL,
+  fecha DATE NOT NULL,
+  color ENUM('ROJO','AZUL','VERDE','AMARILLO') NOT NULL,
+  puntos INT(11) NOT NULL,
+  lider_id INT(11) NOT NULL,
+  creado_en DATETIME DEFAULT CURRENT_TIMESTAMP(),
+  PRIMARY KEY (id),
+  KEY fk_puntos_clase_lider (lider_id),
+  KEY idx_puntos_clase_fecha_color (fecha, color),
+  KEY fk_clase_lista (lista_id),
+  CONSTRAINT fk_clase_lista
+    FOREIGN KEY (lista_id)
+    REFERENCES listas_asistencia(id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_puntos_clase_lider
+    FOREIGN KEY (lider_id)
+    REFERENCES lideres(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_general_ci;
+
+-- =========================================
+-- Tabla: puntos_juegos
+-- =========================================
+CREATE TABLE puntos_juegos (
+  id INT(11) NOT NULL AUTO_INCREMENT,
+  lista_id INT(11) NOT NULL,
+  fecha DATE NOT NULL,
+  color ENUM('ROJO','AZUL','VERDE','AMARILLO') NOT NULL,
+  puntos INT(11) NOT NULL,
+  lider_id INT(11) NOT NULL,
+  creado_en DATETIME DEFAULT CURRENT_TIMESTAMP(),
+  PRIMARY KEY (id),
+  KEY fk_puntos_juegos_lider (lider_id),
+  KEY idx_puntos_juegos_fecha_color (fecha, color),
+  KEY fk_juegos_lista (lista_id),
+  CONSTRAINT fk_juegos_lista
+    FOREIGN KEY (lista_id)
+    REFERENCES listas_asistencia(id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_puntos_juegos_lider
+    FOREIGN KEY (lider_id)
+    REFERENCES lideres(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_general_ci;
+
+-- =========================================
+-- ÚNICO DATO: Usuario ADMIN
+-- =========================================
+INSERT INTO lideres (nombre, pin_hash, rol)
+VALUES (
+  'ADMIN',
+  '$2y$10$th27VXgQSTLRtWO77avGMeQVFb7y2y0Ot6fLEjGVrfociImJDxehq',
+  'ADMIN'
+);
