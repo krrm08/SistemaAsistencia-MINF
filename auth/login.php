@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
-session_start();
 
 // Si ya hay sesión, ir al home
 if (isset($_SESSION['lider_id'])) {

@@ -1,40 +1,39 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
-session_start();
 
+// Seguridad
 if (!isset($_SESSION['lider_id'])) {
     header('Location: /MINF/auth/login.php');
     exit;
 }
 
+// Crear lista SOLO una vez por día (opcional, puedes quitarlo)
 $hoy = date('Y-m-d');
-$lider_id = (int) $_SESSION['lider_id'];
 
-// Verificar si ya existe lista para hoy
-$stmt = $mysqli->prepare(
-    "SELECT id 
-FROM listas_asistencia 
-WHERE fecha = ? AND cerrada = 0
-LIMIT 1
-"
+$check = $mysqli->prepare(
+    "SELECT id FROM listas_asistencia WHERE fecha = ? LIMIT 1"
 );
-$stmt->bind_param('s', $hoy);
-$stmt->execute();
-$lista = $stmt->get_result()->fetch_assoc();
-$stmt->close();
+$check->bind_param('s', $hoy);
+$check->execute();
+$existe = $check->get_result()->fetch_assoc();
+$check->close();
 
-if ($lista) {
-    $lista_id = $lista['id'];
-} else {
-    $stmt = $mysqli->prepare(
-        "INSERT INTO listas_asistencia (fecha, lider_id) VALUES (?, ?)"
-    );
-    $stmt->bind_param('si', $hoy, $lider_id);
-    $stmt->execute();
-    $lista_id = $stmt->insert_id;
-    $stmt->close();
+if ($existe) {
+    header('Location: asistencia.php?lista_id=' . $existe['id']);
+    exit;
 }
 
-// Redirigir a la asistencia del día
+// Crear nueva lista
+$stmt = $mysqli->prepare(
+    "INSERT INTO listas_asistencia (fecha, lider_id, cerrada)
+     VALUES (?, ?, 0)"
+);
+$stmt->bind_param('si', $hoy, $_SESSION['lider_id']);
+$stmt->execute();
+
+$lista_id = $stmt->insert_id;
+$stmt->close();
+
+// 🔗 Redirigir a la asistencia de ESTA lista
 header("Location: asistencia.php?lista_id=$lista_id");
 exit;

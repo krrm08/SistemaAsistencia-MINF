@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
-session_start();
 
 // Seguridad
 if (!isset($_SESSION['lider_id'])) {
@@ -19,6 +18,7 @@ $res = $mysqli->query(
      JOIN lideres u ON u.id = l.lider_id
      ORDER BY l.fecha DESC, l.id DESC"
 );
+
 $page_title = 'Listas de asistencia';
 require_once __DIR__ . '/../layouts/header.php';
 ?>
@@ -57,16 +57,54 @@ require_once __DIR__ . '/../layouts/header.php';
               <?php endif; ?>
             </td>
             <td class="text-center">
+
               <a href="/MINF/asistencia/asistencia.php?lista_id=<?= $l['id'] ?>" class="btn btn-sm btn-outline-primary">
                 👁️ Ver
               </a>
 
-              <?php if ($_SESSION['lider_rol'] === 'ADMIN' && $l['cerrada']): ?>
-                <a href="/MINF/listas/delete_lista.php?id=<?= $l['id'] ?>" class="btn btn-sm btn-outline-danger"
-                  onclick="return confirm('¿Seguro que deseas eliminar esta lista y todas sus asistencias?')">
-                  🗑️
+              <a href="/MINF/puntos/clase.php?lista_id=<?= $l['id'] ?>" class="btn btn-sm btn-outline-primary">
+                📘 Clase
+              </a>
+
+              <a href="/MINF/puntos/juegos.php?lista_id=<?= $l['id'] ?>" class="btn btn-sm btn-outline-warning">
+                🎯 Juegos
+              </a>
+
+              <a href="/MINF/puntos/ranking.php?lista_id=<?= $l['id'] ?>" class="btn btn-sm btn-outline-success">
+                🏆 Ranking
+              </a>
+              <?php if ($l['cerrada']): ?>
+                <a href="/MINF/asistencia/export_pdf.php?lista_id=<?= $l['id'] ?>" class="btn btn-sm btn-outline-secondary"
+                  target="_blank" title="Exportar PDF">
+                  📄 PDF
                 </a>
               <?php endif; ?>
+
+
+              <?php if (isset($_SESSION['lider_rol']) && $_SESSION['lider_rol'] === 'ADMIN'): ?>
+
+                <?php if ($l['cerrada']): ?>
+
+                  <!--Reabrir lista -->
+                  <form method="post" action="/MINF/asistencia/asistencia.php?lista_id=<?= $l['id'] ?>" class="d-inline">
+                    <input type="hidden" name="accion" value="reabrir_lista">
+                    <button type="submit" class="btn btn-sm btn-outline-success"
+                      onclick="return confirm('¿Deseas reabrir esta lista?')" title="Reabrir lista">
+                      🔓
+                    </button>
+                  </form>
+
+                  <!--Eliminar lista -->
+                  <a href="/MINF/listas/delete_lista.php?id=<?= $l['id'] ?>" class="btn btn-sm btn-outline-danger"
+                    onclick="return confirm('¿Seguro que deseas eliminar esta lista y todas sus asistencias?')"
+                    title="Eliminar lista">
+                    🗑️
+                  </a>
+
+                <?php endif; ?>
+
+              <?php endif; ?>
+
 
             </td>
           </tr>
@@ -77,8 +115,8 @@ require_once __DIR__ . '/../layouts/header.php';
     <a href="/MINF/home.php" class="btn btn-secondary btn-sm mt-2">
       ← Volver
     </a>
+
   </div>
 </div>
 
-<?php
-require_once __DIR__ . '/../layouts/footer.php';
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>

@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
-session_start();
+
 
 // Seguridad
 if (!isset($_SESSION['lider_id'])) {

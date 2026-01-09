@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
-session_start();
 
 // Seguridad
 if (!isset($_SESSION['lider_id'])) {
@@ -98,21 +97,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     );
 
     if ($up->execute()) {
-      $mensaje = 'Registro actualizado correctamente.';
-      $registro = array_merge($registro, [
-        'nombre' => $nombre,
-        'color' => $color,
-        'manual' => $manual,
-        'biblia' => $biblia,
-        'versiculo' => $versiculo,
-        'lecturas_dias' => $lecturas_dias,
-        'lecturas_puntos' => $lecturas_puntos,
-        'puntos_total' => $puntos,
-        'lider_id' => $lider_id
-      ]);
+      header("Location: asistencia.php?lista_id=$lista_id&edit=ok");
+      exit;
     } else {
       $mensaje = 'Error al actualizar.';
     }
+
     $up->close();
   }
 }
@@ -164,7 +154,7 @@ require_once __DIR__ . '/../layouts/header.php';
         <label class="form-label d-block">Elementos completados</label>
         <div class="form-check form-check-inline">
           <input class="form-check-input" type="checkbox" name="manual" <?= $registro['manual'] ? 'checked' : '' ?>>
-          <label class="form-check-label">Manual</label>
+          <label class="form-check-label">Manual/Camisa</label>
         </div>
         <div class="form-check form-check-inline">
           <input class="form-check-input" type="checkbox" name="biblia" <?= $registro['biblia'] ? 'checked' : '' ?>>

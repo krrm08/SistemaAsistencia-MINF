@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
-session_start();
 
 // Seguridad
 if (!isset($_SESSION['lider_id'])) {
@@ -18,9 +17,9 @@ if ($lista_id <= 0) {
 // Obtener info de la lista
 $stmt = $mysqli->prepare(
   "SELECT l.fecha, l.cerrada, u.nombre AS lider
-     FROM listas_asistencia l
-     JOIN lideres u ON u.id = l.lider_id
-     WHERE l.id = ?"
+   FROM listas_asistencia l
+   JOIN lideres u ON u.id = l.lider_id
+   WHERE l.id = ?"
 );
 $stmt->bind_param('i', $lista_id);
 $stmt->execute();
@@ -33,13 +32,34 @@ if (!$lista) {
 }
 
 $lista_cerrada = (int) $lista['cerrada'];
+$mensaje = '';
+
+if ($lista_cerrada === 1) {
+  $mensaje = '🔒 Esta lista está cerrada. Solo se permite visualización. En caso de necesitar abrir nuevamente la lista solicite apoyo técnico';
+}
+
+// 🔒 Bloqueo de POST si está cerrada (EXCEPTO reabrir lista por ADMIN)
+if (
+  $lista_cerrada === 1 &&
+  $_SERVER['REQUEST_METHOD'] === 'POST' &&
+  !(
+    isset($_POST['accion']) &&
+    $_POST['accion'] === 'reabrir_lista' &&
+    isset($_SESSION['lider_rol']) &&
+    $_SESSION['lider_rol'] === 'ADMIN'
+  )
+) {
+  header("Location: asistencia.php?lista_id=$lista_id");
+  exit;
+}
+
+
 // Cerrar lista
 if (
   $_SERVER['REQUEST_METHOD'] === 'POST' &&
   ($_POST['accion'] ?? '') === 'cerrar_lista' &&
   !$lista_cerrada
 ) {
-
   $stmt = $mysqli->prepare(
     "UPDATE listas_asistencia SET cerrada = 1 WHERE id = ?"
   );
@@ -51,6 +71,25 @@ if (
   exit;
 }
 
+// 🔓 Reabrir lista (SOLO ADMIN)
+if (
+  $_SERVER['REQUEST_METHOD'] === 'POST' &&
+  isset($_POST['accion']) &&
+  $_POST['accion'] === 'reabrir_lista' &&
+  $lista_cerrada &&
+  isset($_SESSION['lider_rol']) &&
+  $_SESSION['lider_rol'] === 'ADMIN'
+) {
+  $stmt = $mysqli->prepare(
+    "UPDATE listas_asistencia SET cerrada = 0 WHERE id = ?"
+  );
+  $stmt->bind_param('i', $lista_id);
+  $stmt->execute();
+  $stmt->close();
+
+  header("Location: asistencia.php?lista_id=$lista_id&reabierta=1");
+  exit;
+}
 
 
 // Constantes de puntos
@@ -58,13 +97,12 @@ define('P_MANUAL', 200);
 define('P_BIBLIA', 200);
 define('P_VERSICULO', 300);
 define('P_LECTURA_POR_DIA', 100);
-define('P_LECTURA_MAX', 700);
+define('P_LECTURA_MAX_DIAS', 7);
 define('P_TOTAL_MAX', 1400);
-
-$mensaje = '';
 
 // Guardar asistencia
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$lista_cerrada && !isset($_POST['accion'])) {
+
   $nombre = trim($_POST['nombre'] ?? '');
   $grupo = ($_POST['grupo'] ?? 'BUSCADORES') === 'OSITOS' ? 'OSITOS' : 'BUSCADORES';
   $color = strtoupper(trim($_POST['color'] ?? ''));
@@ -72,13 +110,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$lista_cerrada && !isset($_POST['a
   $manual = isset($_POST['manual']) ? 1 : 0;
   $biblia = isset($_POST['biblia']) ? 1 : 0;
   $versiculo = isset($_POST['versiculo']) ? 1 : 0;
-  $lecturas_dias = max(0, (int) ($_POST['lecturas_dias'] ?? 0));
+
+  $lecturas_dias = min(
+    P_LECTURA_MAX_DIAS,
+    max(0, (int) ($_POST['lecturas_dias'] ?? 0))
+  );
 
   $lecturas_puntos = 0;
   $puntos = 0;
 
   if ($grupo === 'BUSCADORES') {
-    $lecturas_puntos = min($lecturas_dias * P_LECTURA_POR_DIA, P_LECTURA_MAX);
+    $lecturas_puntos = $lecturas_dias * P_LECTURA_POR_DIA;
 
     if ($manual)
       $puntos += P_MANUAL;
@@ -89,6 +131,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$lista_cerrada && !isset($_POST['a
 
     $puntos += $lecturas_puntos;
     $puntos = min($puntos, P_TOTAL_MAX);
+  } else {
+    // OSITOS
+    $color = '';
+    $lecturas_dias = 0;
+    $lecturas_puntos = 0;
+    $puntos = 0;
   }
 
   if ($nombre === '') {
@@ -96,10 +144,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$lista_cerrada && !isset($_POST['a
   } else {
     $stmt = $mysqli->prepare(
       "INSERT INTO asistencias
-            (lista_id, lider_id, nombre, grupo, color,
-             manual, biblia, versiculo,
-             lecturas_dias, lecturas_puntos, puntos_total)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)"
+      (lista_id, lider_id, nombre, grupo, color,
+       manual, biblia, versiculo,
+       lecturas_dias, lecturas_puntos, puntos_total)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)"
     );
 
     $stmt->bind_param(
@@ -120,65 +168,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$lista_cerrada && !isset($_POST['a
     if ($stmt->execute()) {
       $mensaje = 'Asistencia registrada correctamente.';
     } else {
-      $mensaje = 'Error: ' . $stmt->error;
+      $mensaje = 'Error al guardar la asistencia.';
     }
     $stmt->close();
   }
 }
 
-// Obtener asistencias del día
+// Obtener asistencias
 $res = $mysqli->prepare(
-  "SELECT id, nombre, grupo, color, manual, biblia, versiculo, lecturas_dias, puntos_total
-     FROM asistencias
-     WHERE lista_id = ?
-     ORDER BY nombre"
+  "SELECT id, nombre, grupo, color,
+          manual, biblia, versiculo,
+          lecturas_dias, puntos_total
+   FROM asistencias
+   WHERE lista_id = ?
+   ORDER BY nombre"
 );
 $res->bind_param('i', $lista_id);
 $res->execute();
 $asistencias = $res->get_result();
-$ranking = [];
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'ranking') {
-
-  $stmt = $mysqli->prepare(
-    "SELECT 
-        color,
-        grupo,
-        COUNT(*) AS total_ninos,
-        SUM(puntos_total) AS total_puntos
-     FROM asistencias
-     WHERE lista_id = ?
-     GROUP BY color, grupo"
-  );
-
-  $stmt->bind_param('i', $lista_id);
-  $stmt->execute();
-  $resRanking = $stmt->get_result();
-  $stmt->close();
-
-  while ($r = $resRanking->fetch_assoc()) {
-    $color = $r['color'];
-
-    if (!isset($ranking[$color])) {
-      $ranking[$color] = [
-        'puntos' => 0,
-        'ositos' => 0,
-        'buscadores' => 0
-      ];
-    }
-
-    if ($r['grupo'] === 'BUSCADORES') {
-      $ranking[$color]['puntos'] += (int) $r['total_puntos'];
-      $ranking[$color]['buscadores'] += (int) $r['total_ninos'];
-    } else {
-      $ranking[$color]['ositos'] += (int) $r['total_ninos'];
-    }
-  }
-
-  // Ordenar por puntos (desc)
-  uasort($ranking, fn($a, $b) => $b['puntos'] <=> $a['puntos']);
-}
-
 $res->close();
 
 $page_title = 'Asistencia ' . $lista['fecha'];
@@ -187,135 +194,101 @@ require_once __DIR__ . '/../layouts/header.php';
 
 <div class="card shadow-sm">
   <div class="card-body">
+
     <h4>Asistencia del <?= $lista['fecha'] ?></h4>
     <p class="text-muted">Creada por: <?= htmlspecialchars($lista['lider']) ?></p>
 
+    <?php if ($mensaje): ?>
+      <div class="alert <?= $lista_cerrada ? 'alert-warning' : 'alert-info' ?>">
+        <?= htmlspecialchars($mensaje) ?>
+      </div>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['edit']) && $_GET['edit'] === 'ok'): ?>
+      <div id="msg-edit" class="alert alert-success">
+        ✏️ Registro actualizado correctamente.
+      </div>
+    <?php endif; ?>
+
+
     <?php if (!$lista_cerrada): ?>
+      <!-- BOTÓN CERRAR LISTA -->
       <form method="post" class="mb-3">
         <input type="hidden" name="accion" value="cerrar_lista">
-        <button class="btn btn-danger"
-          onclick="return confirm('¿Seguro que deseas cerrar esta lista? No se podrá modificar.')">
+        <button class="btn btn-danger" onclick="return confirm('¿Seguro que deseas cerrar esta lista?')">
           🔒 Cerrar lista
         </button>
       </form>
-    <?php else: ?>
-      <div class="alert alert-warning">
-        🔒 Esta lista está cerrada y solo puede visualizarse.
-      </div>
-    <?php endif; ?>
 
+      <!-- FORMULARIO AGREGAR ASISTENCIA -->
+      <form method="post" class="row g-2 mb-4">
 
-    <?php if ($mensaje): ?>
-      <div class="alert alert-info"><?= htmlspecialchars($mensaje) ?></div>
-    <?php endif; ?>
-
-    <form method="post" class="row g-2 mb-4" <?= $lista_cerrada ? 'style="opacity:0.6; pointer-events:none;"' : '' ?>>
-      <div class="col-md-4">
-        <input name="nombre" class="form-control" placeholder="Nombre del niño" required>
-      </div>
-
-      <div class="col-md-3">
-        <select name="color" class="form-select" required>
-          <option value="">Color</option>
-          <option>ROJO</option>
-          <option>AZUL</option>
-          <option>VERDE</option>
-          <option>AMARILLO</option>
-        </select>
-      </div>
-
-      <div class="col-md-5">
-        <div class="form-check form-check-inline">
-          <input class="form-check-input" type="radio" name="grupo" value="BUSCADORES" checked>
-          <label class="form-check-label">BUSCADORES</label>
+        <div class="col-md-4">
+          <input name="nombre" class="form-control" placeholder="Nombre del niño" required>
         </div>
-        <div class="form-check form-check-inline">
-          <input class="form-check-input" type="radio" name="grupo" value="OSITOS">
-          <label class="form-check-label">OSITOS</label>
-        </div>
-      </div>
 
-      <div id="campos-puntos" class="row g-2 mt-2">
         <div class="col-md-3">
-           <label class="form-check-label">Dias de Lectura</label>
-          <input type="number" name="lecturas_dias" id="lecturas_dias" class="form-control" min="0" value="0"
-            placeholder="Días lectura">
+          <select name="color" class="form-select">
+            <option value="">Color</option>
+            <option>ROJO</option>
+            <option>AZUL</option>
+            <option>VERDE</option>
+            <option>AMARILLO</option>
+          </select>
         </div>
-        <div class="col-md-9">
+
+        <div class="col-md-5">
           <div class="form-check form-check-inline">
-            <input class="form-check-input" type="checkbox" id="manual" name="manual">
+            <input class="form-check-input" type="radio" name="grupo" value="BUSCADORES" checked>
+            <label class="form-check-label">BUSCADORES</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="grupo" value="OSITOS">
+            <label class="form-check-label">OSITOS</label>
+          </div>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label">Días lectura (0–7)</label>
+          <input type="number" name="lecturas_dias" class="form-control" min="0" max="7" value="0">
+        </div>
+
+        <div class="col-md-9 mt-4">
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" name="manual">
             <label class="form-check-label">Manual/Camisa</label>
           </div>
           <div class="form-check form-check-inline">
-            <input class="form-check-input" type="checkbox" id="biblia" name="biblia">
+            <input class="form-check-input" type="checkbox" name="biblia">
             <label class="form-check-label">Biblia</label>
           </div>
           <div class="form-check form-check-inline">
-            <input class="form-check-input" type="checkbox" id="versiculo" name="versiculo">
+            <input class="form-check-input" type="checkbox" name="versiculo">
             <label class="form-check-label">Versículo</label>
           </div>
         </div>
-      </div>
 
-      <div class="col-12 mt-3">
-        <button class="btn btn-success">Agregar</button>
-        <a href="/MINF/home.php" class="btn btn-secondary">Volver</a>
-      </div>
-    </form>
-
-    <form method="post" class="mb-3">
-      <input type="hidden" name="accion" value="ranking">
-      <button class="btn btn-warning">
-        🏆 Obtener ranking por color
-      </button>
-    </form>
-
-    <?php if (!empty($ranking)): ?>
-      <div class="card mb-4 border-warning">
-        <div class="card-body">
-          <h5 class="mb-3">🏆 Ranking por color</h5>
-
-          <table class="table table-sm table-bordered align-middle">
-            <thead class="table-warning">
-              <tr>
-                <th>Posición</th>
-                <th>Color</th>
-                <th>Puntos (BUSCADORES)</th>
-                <th>Niños OSITOS</th>
-                <th>Niños BUSCADORES</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php $pos = 1; ?>
-              <?php foreach ($ranking as $color => $data): ?>
-                <tr>
-                  <td><?= $pos++ ?></td>
-                  <td><strong><?= $color ?></strong></td>
-                  <td><?= $data['puntos'] ?></td>
-                  <td><?= $data['ositos'] ?></td>
-                  <td><?= $data['buscadores'] ?></td>
-                </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
+        <div class="col-12 mt-3">
+          <button class="btn btn-success">Agregar</button>
         </div>
-      </div>
+      </form>
     <?php endif; ?>
 
-
+    <!-- TABLA -->
     <h5>Listado del día</h5>
-    <table class="table table-sm table-bordered align-middle">
+    <div class="table-responsive">
+    <table class="table table-sm table-bordered align-middle text-center">
       <thead class="table-secondary">
         <tr>
           <th>Nombre</th>
           <th>Grupo</th>
           <th>Color</th>
-          <th>Manual</th>
+          <th>Manual/Camisa</th>
           <th>Biblia</th>
           <th>Versículo</th>
-          <th>Días de lecturas</th>
+          <th>Días</th>
           <th>Puntos</th>
-          <th class="text-center">Acciones</th>
+          <th>Acciones</th>
         </tr>
       </thead>
       <tbody>
@@ -323,30 +296,29 @@ require_once __DIR__ . '/../layouts/header.php';
           <tr>
             <td><?= htmlspecialchars($a['nombre']) ?></td>
             <td><?= $a['grupo'] ?></td>
-            <td><?= $a['color'] ?></td>
+            <td><?= $a['color'] ?: '—' ?></td>
             <td><?= $a['manual'] ? '✔️' : '—' ?></td>
             <td><?= $a['biblia'] ? '✔️' : '—' ?></td>
             <td><?= $a['versiculo'] ? '✔️' : '—' ?></td>
-            <td><?= (int) $a['lecturas_dias'] ?> días de lecturas</td>
+            <td><?= (int) $a['lecturas_dias'] ?></td>
             <td><?= (int) $a['puntos_total'] ?></td>
-            <td class="text-center">
+            <td>
               <?php if (!$lista_cerrada): ?>
-                <a href="edit.php?id=<?= $a['id'] ?>&lista_id=<?= $lista_id ?>" class="btn btn-sm btn-outline-primary">
-                  ✏️
-                </a>
-                <a href="delete.php?id=<?= $a['id'] ?>&lista_id=<?= $lista_id ?>" class="btn btn-sm btn-outline-danger">
-                  🗑️
-                </a>
+                <a href="edit.php?id=<?= $a['id'] ?>&lista_id=<?= $lista_id ?>"
+                  class="btn btn-sm btn-outline-primary">✏️</a>
+                <a href="delete.php?id=<?= $a['id'] ?>&lista_id=<?= $lista_id ?>"
+                  class="btn btn-sm btn-outline-danger">🗑️</a>
               <?php else: ?>
                 —
               <?php endif; ?>
             </td>
-
-
           </tr>
         <?php endwhile; ?>
       </tbody>
     </table>
+    </div>
+
+    <a href="/MINF/home.php" class="btn btn-secondary btn-sm mt-2">← Volver</a>
 
   </div>
 </div>
@@ -355,40 +327,55 @@ require_once __DIR__ . '/../layouts/header.php';
   document.addEventListener('DOMContentLoaded', () => {
     const radios = document.querySelectorAll('input[name="grupo"]');
 
-    const campos = {
-      manual: document.getElementById('manual'),
-      biblia: document.getElementById('biblia'),
-      versiculo: document.getElementById('versiculo'),
-      lecturas: document.getElementById('lecturas_dias'),
-      color: document.querySelector('select[name="color"]')
-    };
+    const camposBuscadores = [
+      'color',
+      'lecturas_dias',
+      'manual',
+      'biblia',
+      'versiculo'
+    ];
 
-    function actualizarCampos() {
-      const grupo = document.querySelector('input[name="grupo"]:checked').value;
-      const esOsitos = grupo === 'OSITOS';
+    function toggleCampos() {
+      const esOsitos =
+        document.querySelector('input[name="grupo"]:checked').value === 'OSITOS';
 
-      Object.values(campos).forEach(campo => {
+      camposBuscadores.forEach(name => {
+        const campo = document.querySelector(`[name="${name}"]`);
+        if (!campo) return;
+
         campo.disabled = esOsitos;
-      });
 
-      if (esOsitos) {
-        campos.manual.checked = false;
-        campos.biblia.checked = false;
-        campos.versiculo.checked = false;
-        campos.lecturas.value = 0;
-        campos.color.selectedIndex = 0;
-      }
+        // Limpiar valores cuando es OSITOS
+        if (esOsitos) {
+          if (campo.type === 'checkbox') campo.checked = false;
+          if (campo.tagName === 'SELECT') campo.value = '';
+          if (campo.type === 'number') campo.value = 0;
+        }
+      });
     }
 
-    radios.forEach(radio => {
-      radio.addEventListener('change', actualizarCampos);
-    });
-
-    // Ejecutar al cargar la página
-    actualizarCampos();
+    radios.forEach(r => r.addEventListener('change', toggleCampos));
+    toggleCampos(); // 👈 importante al cargar
   });
 </script>
 
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const msg = document.getElementById('msg-edit');
 
-<?php
-require_once __DIR__ . '/../layouts/footer.php';
+  if (msg) {
+    setTimeout(() => {
+      msg.classList.add('fade');
+      msg.style.transition = 'opacity 0.5s';
+      msg.style.opacity = '0';
+
+      setTimeout(() => {
+        msg.remove();
+      }, 600);
+    }, 3000); // ⏱️ 3 segundos visible
+  }
+});
+</script>
+
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>

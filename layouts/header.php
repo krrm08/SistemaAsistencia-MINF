@@ -20,33 +20,42 @@ if (session_status() === PHP_SESSION_NONE) {
 
 <body class="bg-light">
 
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
-        <div class="container">
-            <span class="navbar-brand">MINF</span>
-
-            <?php if (isset($_SESSION['lider_id'])): ?>
-                <div class="d-flex align-items-center text-white">
-                    <span class="me-3">
-                        <?= htmlspecialchars($_SESSION['lider_nombre']) ?>
-                        (<?= $_SESSION['lider_rol'] ?>)
-                    </span>
-
-                    <a href="/MINF/home.php" class="btn btn-sm btn-light me-2">
-                        Inicio
-                    </a>
-
-                    <?php if ($_SESSION['lider_rol'] === 'ADMIN'): ?>
-                        <a href="/MINF/admin/admin_lideres.php" class="btn btn-sm btn-warning me-2">
-                            Admin
-                        </a>
-                    <?php endif; ?>
-
-                    <a href="/MINF/auth/logout.php" class="btn btn-sm btn-outline-light">
-                        Salir
-                    </a>
-                </div>
-            <?php endif; ?>
-        </div>
-    </nav>
-
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
     <div class="container">
+
+        <a href="/MINF/home.php" class="navbar-brand d-flex align-items-center gap-2">
+            <img
+                src="/MINF/public/img/logo_minf.png"
+                alt="MINF"
+                style="height:40px; width:auto;"
+            >
+        </a>
+
+        <?php if (isset($_SESSION['lider_id'])): ?>
+            <div class="d-flex align-items-center text-white">
+
+                <span class="me-3">
+                    <?= htmlspecialchars($_SESSION['lider_nombre']) ?>
+                    (<?= htmlspecialchars($_SESSION['lider_rol']) ?>)
+                </span>
+
+                <a href="/MINF/home.php" class="btn btn-sm btn-light me-2">
+                    Inicio
+                </a>
+
+                <?php if ($_SESSION['lider_rol'] === 'ADMIN'): ?>
+                    <a href="/MINF/admin/admin_lideres.php" class="btn btn-sm btn-warning me-2">
+                        Admin
+                    </a>
+                <?php endif; ?>
+
+                <a href="/MINF/auth/logout.php" class="btn btn-sm btn-outline-light">
+                    Salir
+                </a>
+            </div>
+        <?php endif; ?>
+
+    </div>
+</nav>
+
+<div class="container">

@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
-session_start();
 
 // Solo ADMIN puede acceder
 if (!isset($_SESSION['lider_id']) || $_SESSION['lider_rol'] !== 'ADMIN') {
@@ -41,8 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Obtener líderes
 $res = $mysqli->query(
-  "SELECT nombre, rol FROM lideres ORDER BY nombre"
+  "SELECT id, nombre, rol FROM lideres ORDER BY nombre"
 );
+
 ?>
 
 <div class="card shadow-sm">
@@ -79,6 +79,7 @@ $res = $mysqli->query(
         <tr>
           <th>Nombre</th>
           <th>Rol</th>
+          <th>Acciones</th>
         </tr>
       </thead>
       <tbody>
@@ -86,9 +87,22 @@ $res = $mysqli->query(
           <tr>
             <td><?= htmlspecialchars($l['nombre']) ?></td>
             <td><?= $l['rol'] ?></td>
+            <td class="text-center">
+
+              <?php if ($l['id'] != $_SESSION['lider_id']): ?>
+                <a href="/MINF/admin/delete_lider.php?id=<?= $l['id'] ?>" class="btn btn-sm btn-outline-danger"
+                  onclick="return confirm('¿Seguro que deseas eliminar este líder?')" title="Eliminar líder">
+                  🗑️
+                </a>
+              <?php else: ?>
+                —
+              <?php endif; ?>
+
+            </td>
           </tr>
         <?php endwhile; ?>
       </tbody>
+
     </table>
 
     <a href="/MINF/home.php" class="btn btn-secondary btn-sm">
